@@ -85,7 +85,9 @@ insert into public.banks (name, slug, source_url, parser_type, enabled) values
     ('Canara Bank',            'canara',      'https://canarabank.com/pages/forex-card-rates',                                                                            'html',         true),
     ('Punjab National Bank',   'pnb',         'https://www.pnbindia.in/downloadprocess.aspx?fid=A+rrvZeJc+PIaxfEqVTIQQ%3D%3D',                                            'pdf',          true),
     ('Union Bank of India',    'union',       'https://www.unionbankofindia.bank.in/pdf/foreign-exchange-card-rates-applicable-to-various-forex-transactions.pdf',       'pdf',          true),
-    ('Indian Overseas Bank',   'iob',         'https://www.iob.bank.in/en/forex-rates',                                                                                 'html',         true)
+    ('Indian Overseas Bank',   'iob',         'https://www.iob.bank.in/en/forex-rates',                                                                                 'html',         true),
+    ('IDFC FIRST Bank',        'idfc',        'https://www.idfcfirst.bank.in/forex-rates-teletransfer',                                                                 'html_dynamic', true),
+    ('Kotak Mahindra Bank',    'kotak',       'https://www.kotak.bank.in/en/rates/forex-rates.html',                                                                    'html_dynamic', true)
 on conflict (slug) do update set
     name        = excluded.name,
     source_url  = excluded.source_url,

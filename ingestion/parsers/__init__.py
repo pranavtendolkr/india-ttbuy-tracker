@@ -8,7 +8,9 @@ from .bob import BankOfBarodaParser
 from .canara import CanaraParser
 from .hdfc import HDFCParser
 from .icici import ICICIParser
+from .idfc import IDFCParser
 from .iob import IOBParser
+from .kotak import KotakParser
 from .pnb import PNBParser
 from .sbi import SBIParser
 from .union import UnionBankParser
@@ -23,6 +25,8 @@ REGISTRY: dict[str, type[BankParser]] = {
     PNBParser.BANK_SLUG: PNBParser,
     UnionBankParser.BANK_SLUG: UnionBankParser,
     IOBParser.BANK_SLUG: IOBParser,
+    IDFCParser.BANK_SLUG: IDFCParser,
+    KotakParser.BANK_SLUG: KotakParser,
 }
 
 __all__ = [
@@ -38,4 +42,6 @@ __all__ = [
     "PNBParser",
     "UnionBankParser",
     "IOBParser",
+    "IDFCParser",
+    "KotakParser",
 ]
