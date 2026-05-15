@@ -58,24 +58,34 @@ export function RatesChart({ banks, rates, selectedBankIds }: Props) {
           <Tooltip
             labelFormatter={(label: string) => formatLong(label)}
             formatter={(value: number | string) =>
-              typeof value === 'number' ? value.toFixed(4) : value
+              typeof value === 'number' ? value.toFixed(2) : value
             }
             contentStyle={{ fontSize: 12 }}
           />
           <Legend wrapperStyle={{ fontSize: 12 }} />
-          {visibleBanks.map((bank, idx) => (
-            <Line
-              key={bank.id}
-              type="monotone"
-              dataKey={bank.slug}
-              name={bank.name}
-              stroke={colorForBank(bank.slug, idx)}
-              dot={false}
-              strokeWidth={2}
-              connectNulls={false}
-              isAnimationActive={false}
-            />
-          ))}
+          {visibleBanks.map((bank, idx) => {
+            const color = colorForBank(bank.slug, idx);
+            // When the series has only a handful of points, lines aren't
+            // visible. Force dots in that case so the user sees data.
+            const points = data.reduce(
+              (acc, row) => acc + (row[bank.slug] != null ? 1 : 0),
+              0,
+            );
+            const showDots = points <= 5;
+            return (
+              <Line
+                key={bank.id}
+                type="monotone"
+                dataKey={bank.slug}
+                name={bank.name}
+                stroke={color}
+                dot={showDots ? { r: 3, fill: color } : false}
+                strokeWidth={2}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            );
+          })}
         </LineChart>
       </ResponsiveContainer>
     </div>

@@ -45,7 +45,7 @@ export function LatestRatesTable({ rows, currency }: Props) {
                         : 'tabular-nums'
                     }
                   >
-                    {row.rate_value.toFixed(4)}
+                    {row.rate_value.toFixed(2)}
                   </span>
                 </Td>
                 <Td>
