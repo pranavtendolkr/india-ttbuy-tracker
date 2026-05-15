@@ -5,8 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Controls } from './Controls';
 import { LatestRatesTable } from './LatestRatesTable';
 import { RatesChart } from './RatesChart';
-import { daysAgoIso } from '@/lib/dates';
-import { getBanks, getLatestPerBank, getRates } from '@/lib/queries';
+import { daysAgoIso, todayIso } from '@/lib/dates';
+import { getBanks, getLatestPerBank, getRates, getRatesAsOf } from '@/lib/queries';
 import { SUPABASE_CONFIGURED } from '@/lib/supabase';
 import type { Bank, LatestRate, Rate } from '@/lib/types';
 
@@ -21,6 +21,8 @@ export function Dashboard() {
   const [selectedBankIds, setSelectedBankIds] = useState<Set<string>>(new Set());
   const [rates, setRates] = useState<Rate[]>([]);
   const [latest, setLatest] = useState<LatestRate[]>([]);
+  const [asOfDate, setAsOfDate] = useState<string>(''); // '' means "latest"
+  const [asOfRows, setAsOfRows] = useState<LatestRate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,6 +74,26 @@ export function Dashboard() {
     };
   }, [currency, rangeDays]);
 
+  // Fetch as-of rows whenever the user picks a date.
+  useEffect(() => {
+    if (!SUPABASE_CONFIGURED || !asOfDate) {
+      setAsOfRows([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await getRatesAsOf(currency, asOfDate);
+        if (!cancelled) setAsOfRows(rows);
+      } catch (e) {
+        if (!cancelled) setError(stringifyError(e));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currency, asOfDate]);
+
   const toggleBank = (id: string) => {
     setSelectedBankIds((prev) => {
       const next = new Set(prev);
@@ -84,10 +106,16 @@ export function Dashboard() {
   const selectAll = () => setSelectedBankIds(new Set(banks.map((b) => b.id)));
   const clearAll = () => setSelectedBankIds(new Set());
 
-  const visibleLatest = useMemo(
-    () => latest.filter((r) => selectedBankIds.has(r.bank_id)),
-    [latest, selectedBankIds],
+  const tableRows = asOfDate ? asOfRows : latest;
+  const visibleTableRows = useMemo(
+    () => tableRows.filter((r) => selectedBankIds.has(r.bank_id)),
+    [tableRows, selectedBankIds],
   );
+  const visibleBanks = useMemo(
+    () => banks.filter((b) => selectedBankIds.has(b.id)),
+    [banks, selectedBankIds],
+  );
+  const today = todayIso();
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
@@ -129,8 +157,46 @@ export function Dashboard() {
       </section>
 
       <section className="mb-12">
-        <h2 className="mb-3 text-lg font-semibold">Latest rate per bank</h2>
-        <LatestRatesTable rows={visibleLatest} currency={currency} />
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <h2 className="text-lg font-semibold">
+            {asOfDate ? 'Rate per bank, as of selected date' : 'Latest rate per bank'}
+          </h2>
+          <div className="flex items-center gap-2 text-sm">
+            <label htmlFor="asof" className="text-neutral-700 dark:text-neutral-300">
+              Pick a date
+            </label>
+            <input
+              id="asof"
+              type="date"
+              value={asOfDate}
+              max={today}
+              onChange={(e) => setAsOfDate(e.target.value)}
+              className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+            />
+            {asOfDate && (
+              <button
+                type="button"
+                onClick={() => setAsOfDate('')}
+                className="rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
+              >
+                Reset to latest
+              </button>
+            )}
+          </div>
+        </div>
+        <LatestRatesTable
+          rows={visibleTableRows}
+          currency={currency}
+          asOf={asOfDate || undefined}
+          allBanks={visibleBanks}
+        />
+        {asOfDate && (
+          <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+            Shows each bank&rsquo;s most recent rate published on or before the picked date.
+            A &ldquo;from N days earlier&rdquo; badge appears when the bank did not publish on
+            the picked day itself.
+          </p>
+        )}
       </section>
 
       <footer className="border-t border-neutral-200 pt-4 text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
