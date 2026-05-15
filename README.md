@@ -201,3 +201,14 @@ The schema already stores `currency` per row. To extend beyond USD:
   chart.
 - This site is informational only. Always confirm the rate with your bank
   before initiating a transfer.
+
+## Useful commands
+
+```bash
+# Run all parsers against live sources without writing to Supabase.
+# Saves raw payloads under ingestion/_debug/ for inspection.
+python -m ingestion.tools.dryrun
+
+# Just one or two parsers
+python -m ingestion.tools.dryrun sbi iob
+```

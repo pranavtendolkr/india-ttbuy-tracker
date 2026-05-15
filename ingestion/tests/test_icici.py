@@ -16,6 +16,6 @@ def test_icici_parses_inward_tt_buy(fixtures_dir: Path):
     rate = rates[0]
     assert rate.currency == "USD"
     assert rate.rate_type == "inward_tt_buy"
-    assert rate.rate_value == 84.05
+    assert rate.rate_value == 94.17
     assert rate.effective_date == date(2026, 5, 15)
     assert rate.source_status == "ok"

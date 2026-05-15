@@ -7,7 +7,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 DEFAULT_USER_AGENT = (
-    "india-ttbuy-tracker/0.1 (+https://github.com/ptendolkar/india-ttbuy-tracker)"
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 )
 DEFAULT_TIMEOUT = 30
 

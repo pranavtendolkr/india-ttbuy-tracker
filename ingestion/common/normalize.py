@@ -17,10 +17,15 @@ CURRENCY_ALIASES: dict[str, str] = {
     "USD/INR": "USD",
 }
 
-# Phrases that indicate the column we want: inward remittance / TT buying
+# Phrases that indicate the column we want: inward remittance / TT buying.
+# Different banks shorten "Telegraphic Transfer" wildly: T.T., TT, TT/DD, TT/CHQ.
+# HDFC even compresses to "InwRem". Be liberal here, then the negative
+# EXCLUDE_PATTERNS list filters out forex-card / cash / travel-card columns.
 TT_BUY_INWARD_PATTERNS: tuple[re.Pattern[str], ...] = (
-    re.compile(r"inward.*remittance", re.IGNORECASE),
-    re.compile(r"tt[\s\-]*buy(?:ing)?", re.IGNORECASE),
+    re.compile(r"inward.*(remit|wire|rem\b)", re.IGNORECASE),
+    re.compile(r"\binw[\s\.\-]*rem", re.IGNORECASE),  # HDFC: InwRem
+    re.compile(r"t\.?\s*t\.?[\s\-/.]*buy(?:ing)?", re.IGNORECASE),
+    re.compile(r"t\.?\s*t\.?[\s/]*(?:dd|chq|cheque)", re.IGNORECASE),  # Canara: TT/CHQ
     re.compile(r"telegraphic.*transfer.*buy", re.IGNORECASE),
 )
 
@@ -38,8 +43,10 @@ def normalize_currency(value: str) -> str | None:
     key = re.sub(r"\s+", " ", value.strip().upper())
     if key in CURRENCY_ALIASES:
         return CURRENCY_ALIASES[key]
-    # Some sheets prefix with the country, e.g. "USA / USD"
-    for token in re.split(r"[\s/|,]+", key):
+    # Banks format the currency cell wildly: "USD/INR", "USD-INR",
+    # "United States Dollar (USD)", "USA | USD". Split on every common
+    # separator and a parenthesis.
+    for token in re.split(r"[\s/|,\-()]+", key):
         if token in CURRENCY_ALIASES:
             return CURRENCY_ALIASES[token]
     return None
@@ -80,10 +87,24 @@ def looks_like_usd_row(cells: Iterable[str]) -> bool:
 
 
 _DATE_HINT_RE = re.compile(
-    r"(?:date|w\.?e\.?f\.?|with effect from|effective)\s*[:\-]?\s*"
+    r"(?:date|w\.?e\.?f\.?|with effect from|effective|"
+    r"published\s+(?:on|at)|as\s+on|valid\s+from)"
+    r"\s*[:\-]?\s*"
     r"([0-9]{1,2}[\-/. ][A-Za-z0-9]{2,9}[\-/. ][0-9]{2,4}|"
-    r"[A-Za-z]+\s+\d{1,2},?\s+\d{4}|"
+    r"[A-Za-z]+\s+\d{1,2},?\s*\d{4}|"
     r"\d{4}[\-/.]\d{2}[\-/.]\d{2})",
+    re.IGNORECASE,
+)
+
+# Tighter fallback: require that the middle segment looks like a month name
+# or a 1-2 digit number, not arbitrary words like "at".
+_FALLBACK_DATE_RE = re.compile(
+    r"\b(\d{1,2}[\-/. ]"
+    r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|\d{1,2})"
+    r"[A-Za-z]*[\-/. ]\d{2,4})\b|"
+    r"\b(\d{4}[\-/.]\d{2}[\-/.]\d{2})\b|"
+    r"\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*"
+    r"\s+\d{1,2},?\s*\d{4})\b",
     re.IGNORECASE,
 )
 
@@ -98,11 +119,10 @@ def parse_effective_date(text: str) -> date | None:
             return date_parser.parse(candidate, dayfirst=True).date()
         except (ValueError, TypeError):
             pass
-    # Fall back to scanning for any plausible date
-    for token in re.findall(
-        r"\d{1,2}[\-/. ][A-Za-z0-9]{2,9}[\-/. ][0-9]{2,4}|\d{4}[\-/.]\d{2}[\-/.]\d{2}",
-        text,
-    ):
+    for raw in _FALLBACK_DATE_RE.findall(text):
+        token = next((t for t in raw if t), "") if isinstance(raw, tuple) else raw
+        if not token:
+            continue
         try:
             return date_parser.parse(token, dayfirst=True).date()
         except (ValueError, TypeError):

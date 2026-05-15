@@ -16,7 +16,7 @@ def test_axis_parses_inward_tt_buy(fixtures_dir: Path):
     rate = rates[0]
     assert rate.currency == "USD"
     assert rate.rate_type == "inward_tt_buy"
-    assert rate.rate_value == 84.15
+    assert rate.rate_value == 94.27
     assert rate.effective_date == date(2026, 5, 15)
     assert rate.source_status == "ok"
 

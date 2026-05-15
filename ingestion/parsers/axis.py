@@ -1,17 +1,18 @@
-"""Axis Bank inward remittance TT buy rate parser.
+"""Axis Bank inward wire remittance TT-buy rate parser.
 
-The Axis "currency convert forex" page is rendered server-side as an
-ASP.NET WebForms page with a table of currencies and rates. We do plain HTTP
-+ BeautifulSoup parsing (no JS execution required for the table itself).
+Axis publishes a table where the column header is literally
+"Inward Wire Remittance Rate (TT Buy)" and each row is
+``[blank, currency_name, currency_code, rate]``. So we look for a header cell
+matching the inward TT-buy pattern, then in body rows pick the cell whose
+currency code normalizes to USD and read the rightmost numeric cell as the
+rate.
 """
 
 from __future__ import annotations
 
-from datetime import date
 from typing import Sequence
 
-from bs4 import BeautifulSoup
-
+from ..common.html import expand_table, iter_html_tables, parse_html
 from ..common.normalize import (
     is_inward_tt_buy_label,
     normalize_currency,
@@ -24,35 +25,28 @@ from .base import BankParser, ParsedRate
 
 class AxisParser(BankParser):
     BANK_SLUG = "axis"
-    PARSER_VERSION = "0.1.0"
+    PARSER_VERSION = "0.2.0"
     SOURCE_URL = (
         "https://application.axis.bank.in/WebForms/currency-convert-forex/index.aspx"
     )
 
     def parse(self, payload: bytes) -> Sequence[ParsedRate]:
-        soup = BeautifulSoup(payload, "lxml")
+        soup = parse_html(payload)
         page_text = soup.get_text(" ", strip=True)
         effective = parse_effective_date(page_text) or today_ist()
         source_status = "ok" if parse_effective_date(page_text) else "date_inferred"
 
         for table in soup.find_all("table"):
-            headers = [
-                _clean(th.get_text(" ", strip=True))
-                for th in table.find_all("th")
-            ]
-            tt_col = _find_tt_buy_index(headers)
-            if tt_col is None:
+            grid = expand_table(table)
+            # Confirm this table is the inward-TT-buy table by searching the
+            # first few header rows for the right label.
+            if not _has_inward_tt_buy_header(grid):
                 continue
-
-            for tr in table.find_all("tr"):
-                cells = [
-                    _clean(td.get_text(" ", strip=True)) for td in tr.find_all("td")
-                ]
-                if len(cells) <= tt_col:
+            for row in grid:
+                if not any(normalize_currency(c) == "USD" for c in row):
                     continue
-                if not any(normalize_currency(c) == "USD" for c in cells):
-                    continue
-                rate = parse_decimal(cells[tt_col])
+                # Pick the last numeric cell on this row as the rate.
+                rate = _last_decimal(row)
                 if rate is None:
                     continue
                 return [
@@ -61,21 +55,26 @@ class AxisParser(BankParser):
                         rate_type="inward_tt_buy",
                         rate_value=rate,
                         effective_date=effective,
-                        source_title="Axis Bank Forex Rates",
+                        source_title="Axis Bank Inward Wire Remittance Rate",
                         source_status=source_status,
                     )
                 ]
         return []
 
 
-def _clean(text: str) -> str:
-    return " ".join((text or "").split())
+def _has_inward_tt_buy_header(grid: list[list[str]]) -> bool:
+    for row in grid[:4]:
+        for cell in row:
+            if is_inward_tt_buy_label(cell):
+                return True
+    return False
 
 
-def _find_tt_buy_index(headers: list[str]) -> int | None:
-    for idx, header in enumerate(headers):
-        if is_inward_tt_buy_label(header):
-            return idx
+def _last_decimal(row: list[str]) -> float | None:
+    for cell in reversed(row):
+        v = parse_decimal(cell)
+        if v is not None:
+            return v
     return None
 
 

@@ -1,11 +1,9 @@
-"""ICICI Bank inward remittance TT-buy rate parser.
+"""Indian Overseas Bank forex card rates parser.
 
-ICICI's table has a two-row header:
-    row 0: [ Currency (rowspan=2), Bank Buying Rate (colspan=5),
-             Bank Selling Rate (colspan=5) ]
-    row 1: [ -, TT Buying rate, Bills Buying rate, Currency notes,
-             Forex Prepaid card, Demand Draft, TT Selling Rate, ... ]
-We expand and merge the headers, then pick the buying-side TT column.
+The IOB page (``/en/forex-rates``) has a single rate table. The header is
+two-row but the column nesting is mislabeled by the bank itself: the *first*
+group is called "SELLING RATE" and contains "TT Buy" + "TT Sell". We just
+match the literal "TT Buy" sub-header and ignore the misleading group label.
 """
 
 from __future__ import annotations
@@ -23,12 +21,10 @@ from ..common.normalize import (
 from .base import BankParser, ParsedRate
 
 
-class ICICIParser(BankParser):
-    BANK_SLUG = "icici"
-    PARSER_VERSION = "0.2.0"
-    SOURCE_URL = (
-        "https://instantforex.icicibank.com/instantforex/forms/MicroCardRateView.aspx"
-    )
+class IOBParser(BankParser):
+    BANK_SLUG = "iob"
+    PARSER_VERSION = "0.1.0"
+    SOURCE_URL = "https://www.iob.bank.in/en/forex-rates"
 
     def parse(self, payload: bytes) -> Sequence[ParsedRate]:
         soup = parse_html(payload)
@@ -41,15 +37,15 @@ class ICICIParser(BankParser):
             if len(grid) < 3:
                 continue
             header = merge_header_rows(grid, n_header_rows=2)
-            buy_col = _find_buying_tt_column(header)
-            if buy_col is None:
+            tt_col = _find_tt_buy_column(header)
+            if tt_col is None:
                 continue
             for row in grid[2:]:
                 if not any(normalize_currency(c) == "USD" for c in row):
                     continue
-                if buy_col >= len(row):
+                if tt_col >= len(row):
                     continue
-                rate = parse_decimal(row[buy_col])
+                rate = parse_decimal(row[tt_col])
                 if rate is None:
                     continue
                 return [
@@ -58,26 +54,28 @@ class ICICIParser(BankParser):
                         rate_type="inward_tt_buy",
                         rate_value=rate,
                         effective_date=effective,
-                        source_title="ICICI Bank Inward Remittance Rates",
+                        source_title="IOB Forex Card Rates",
                         source_status=source_status,
                     )
                 ]
         return []
 
 
-def _find_buying_tt_column(header: list[str]) -> int | None:
-    candidates: list[int] = []
+def _find_tt_buy_column(header: list[str]) -> int | None:
+    """Return the column whose merged header contains the inward TT-buy label.
+
+    IOB's header grouping is misleading (the "SELLING RATE" group actually
+    contains the TT Buy column), so we ignore the group label and match on
+    the sub-label directly.
+    """
     for idx, label in enumerate(header):
-        if not is_inward_tt_buy_label(label):
+        # Take only the rightmost segment of the merged "A | B" label
+        leaf = label.rsplit("|", 1)[-1].strip()
+        if not leaf:
             continue
-        upper = label.upper()
-        if "SELL" in upper:
-            continue
-        candidates.append(idx)
-    explicit_buy = [i for i in candidates if "BUY" in header[i].upper()]
-    if explicit_buy:
-        return explicit_buy[0]
-    return candidates[0] if candidates else None
+        if is_inward_tt_buy_label(leaf) and "SELL" not in leaf.upper():
+            return idx
+    return None
 
 
-__all__ = ["ICICIParser"]
+__all__ = ["IOBParser"]
