@@ -1,0 +1,54 @@
+name: Daily ingestion
+
+on:
+  schedule:
+    # 12:30 UTC = 18:00 IST. Most banks publish their daily card rates by then.
+    - cron: '30 12 * * *'
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: 'Enable debug artifacts (raw fetched bytes for failing banks)'
+        required: false
+        default: 'false'
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      INGESTION_DEBUG: ${{ inputs.debug }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: ingestion/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r ingestion/requirements.txt
+
+      - name: Run ingestion
+        run: python -m ingestion.run
+
+      - name: Upload debug artifacts
+        if: failure() && inputs.debug == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ingestion-debug-${{ github.run_id }}
+          path: |
+            ingestion/_debug/**
+          if-no-files-found: ignore
+          retention-days: 7

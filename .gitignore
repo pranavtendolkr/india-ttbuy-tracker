@@ -216,3 +216,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Node / Next.js (frontend/)
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# Ingestion debug artifacts
+ingestion/_debug/
